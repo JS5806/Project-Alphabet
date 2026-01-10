@@ -1,115 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Trash2, CheckCircle, Circle, Plus, ListTodo } from 'lucide-react';
 
-interface Todo {
-  id: string;
-  title: string;
-  completed: boolean;
-  priority: 'High' | 'Medium' | 'Low';
-}
-
-const API_URL = 'http://localhost:5000/api/todos';
-
-export default function App() {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [input, setInput] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+function App() {
+  const [profile, setProfile] = useState({ nickname: '', bio: '', profile_image_url: '' });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
-    fetchTodos();
+    fetch('http://localhost:5000/api/v1/users/me')
+      .then(res => res.json())
+      .then(data => {
+        setProfile(data);
+        setPreview(data.profile_image_url);
+      });
   }, []);
 
-  const fetchTodos = async () => {
-    const res = await axios.get(API_URL);
-    setTodos(res.data);
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setPreview(URL.createObjectURL(file));
+    }
   };
 
-  const addTodo = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    const res = await axios.post(API_URL, { title: input, priority: 'Medium' });
-    setTodos([...todos, res.data]);
-    setInput('');
-  };
+    const formData = new FormData();
+    formData.append('nickname', profile.nickname);
+    formData.append('bio', profile.bio);
+    if (selectedFile) formData.append('profileImage', selectedFile);
 
-  const toggleTodo = async (id: string, completed: boolean) => {
-    await axios.patch(`${API_URL}/${id}`, { completed: !completed });
-    setTodos(todos.map(t => t.id === id ? { ...t, completed: !completed } : t));
+    try {
+      const res = await fetch('http://localhost:5000/api/v1/users/me', {
+        method: 'PATCH',
+        body: formData,
+      });
+      if (res.ok) {
+        setStatus('Profile updated successfully!');
+      } else {
+        setStatus('Update failed. Try another nickname.');
+      }
+    } catch (err) {
+      setStatus('Error connecting to server.');
+    }
   };
-
-  const deleteTodo = async (id: string) => {
-    await axios.delete(`${API_URL}/${id}`);
-    setTodos(todos.filter(t => t.id !== id));
-  };
-
-  const filteredTodos = todos.filter(t => {
-    if (filter === 'active') return !t.completed;
-    if (filter === 'completed') return t.completed;
-    return true;
-  });
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 flex justify-center">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="p-6 bg-indigo-600">
-          <div className="flex items-center gap-3 text-white mb-6">
-            <ListTodo size={32} />
-            <h1 className="text-2xl font-bold">Smart Todo</h1>
+    <div className="min-h-screen bg-gray-100 p-8 flex flex-col items-center">
+      <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
+        <h1 className="text-2xl font-bold mb-6 text-center">Edit Profile</h1>
+        
+        <form onSubmit={handleUpdate} className="space-y-4">
+          <div className="flex flex-col items-center mb-4">
+            <img src={preview} alt="Preview" className="w-32 h-32 rounded-full object-cover border-4 border-blue-500 shadow-md" />
+            <input type="file" onChange={handleImageChange} className="mt-2 text-sm" />
           </div>
-          
-          <form onSubmit={addTodo} className="relative">
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Nickname</label>
             <input 
-              className="w-full py-3 px-4 rounded-xl outline-none pr-12"
-              placeholder="What needs to be done?"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              type="text" 
+              className="mt-1 block w-full border rounded-md p-2"
+              value={profile.nickname} 
+              onChange={e => setProfile({...profile, nickname: e.target.value})}
+              required 
             />
-            <button type="submit" className="absolute right-2 top-1.5 p-1.5 bg-indigo-500 text-white rounded-lg">
-              <Plus size={24} />
-            </button>
-          </form>
-        </div>
+          </div>
 
-        <div className="flex border-b">
-          {(['all', 'active', 'completed'] as const).map(f => (
-            <button 
-              key={f} 
-              onClick={() => setFilter(f)}
-              className={`flex-1 py-3 text-sm font-medium capitalize transition-colors ${
-                filter === f ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Bio</label>
+            <textarea 
+              className="mt-1 block w-full border rounded-md p-2"
+              value={profile.bio} 
+              onChange={e => setProfile({...profile, bio: e.target.value})}
+            />
+          </div>
 
-        <ul className="divide-y">
-          {filteredTodos.map(todo => (
-            <li key={todo.id} className="flex items-center gap-3 p-4 hover:bg-slate-50 group">
-              <button onClick={() => toggleTodo(todo.id, todo.completed)}>
-                {todo.completed ? 
-                  <CheckCircle className="text-green-500" /> : 
-                  <Circle className="text-gray-300" />
-                }
-              </button>
-              <span className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                {todo.title}
-              </span>
-              <button 
-                onClick={() => deleteTodo(todo.id)}
-                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
-              >
-                <Trash2 size={18} />
-              </button>
-            </li>
-          ))}
-          {filteredTodos.length === 0 && (
-            <li className="p-8 text-center text-gray-400 italic">No tasks found.</li>
-          )}
-        </ul>
+          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition">
+            Save Changes
+          </button>
+        </form>
+        {status && <p className="mt-4 text-center text-sm font-semibold text-blue-600">{status}</p>}
       </div>
     </div>
   );
 }
+
+export default App;
