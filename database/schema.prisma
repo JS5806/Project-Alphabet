@@ -1,0 +1,51 @@
+// 기초 재고 관리 시스템의 핵심 스키마 정의
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id          Int            @id @default(autoincrement())
+  barcode     String         @unique // 바코드 필드 (Unique 인덱스 적용)
+  sku         String         @unique // SKU (Stock Keeping Unit)
+  name        String
+  category    String?
+  price       Decimal        @db.Decimal(12, 2)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  stock       Stock?         
+  logs        InventoryLog[]
+
+  @@index([barcode]) // 고속 조회를 위한 인덱싱
+}
+
+model Stock {
+  id        Int      @id @default(autoincrement())
+  productId Int      @unique
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  // 수량은 0 미만으로 내려갈 수 없도록 애플리케이션 레벨 또는 DB Check 제약조건 필요
+}
+
+enum TransactionType {
+  IN   // 입고
+  OUT  // 출고
+}
+
+model InventoryLog {
+  id        Int             @id @default(autoincrement())
+  productId Int
+  product   Product         @relation(fields: [productId], references: [id])
+  type      TransactionType
+  quantity  Int
+  note      String?         // 특이사항 (예: 파손, 반품 등)
+  createdAt DateTime        @default(now())
+
+  @@index([productId, createdAt]) // 이력 추적 최적화
+}
