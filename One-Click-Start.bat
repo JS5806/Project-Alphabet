@@ -1,34 +1,22 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
 
-echo [1/3] Checking Python Installation...
-python --version >nul 2>&1
+echo [Step 1] Checking Environment...
+node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Error: Python is not installed or not in PATH.
-    echo Please install Python from https://www.python.org/
+    echo ERROR: Node.js is not installed. Please install Node.js from https://nodejs.org/
     pause
     exit /b
 )
 
-echo [2/3] Setting up Virtual Environment and Dependencies...
-if not exist "venv" (
-    python -m venv venv
-)
+echo [Step 2] Installing Dependencies (This may take a moment)...
+call npm install
+cd frontend
+call npm install
+cd ../backend
+call npm install
+cd ..
 
-call venv\Scripts\activate
-
-if exist "requirements.txt" (
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-)
-
-echo [3/3] Starting Simple Digital Clock...
-python main.py
-
-if %errorlevel% neq 0 (
-    echo.
-    echo Application crashed. Please check the logs.
-    pause
-)
-
-deactivate
+echo [Step 3] Launching Digital Clock (UI/UX Phase 2)...
+start http://localhost:5173
+npm start
