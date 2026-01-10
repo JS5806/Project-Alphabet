@@ -1,0 +1,16 @@
+UI Component Specifications:
+
+1. Color Palette (Dark Mode First):
+   - Background: #030712 (Gray-950)
+   - Secondary: #111827 (Gray-900)
+   - Primary: #3B82F6 (Blue-500)
+   - Accent: #10B981 (Emerald-500)
+
+2. Typography:
+   - Font: Inter or Sans-Serif system font
+   - Headings: Bold, Tracking-tight
+
+3. Interaction:
+   - Skeleton UI for all chart containers during data fetch.
+   - Tooltip animations with 150ms delay for performance.
+   - Mobile responsiveness: Sidebar collapses into a hamburger menu on screens < 1024px.
