@@ -1,4 +1,0 @@
-[Figma Design Guide]
-1. Maintenance Page: 503 status code visual with estimated completion time.
-2. Dashboard: Red/Green status indicators for each microservice.
-3. User Feedback: 'Report Issue' button connected to Jira Service Desk API.
