@@ -1,35 +1,56 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
-title Smart Todo Management System - Setup & Start
+title Smart Todo Management System - One Click Startup
 
+echo ===================================================
 echo [1/4] Checking Prerequisites...
+echo ===================================================
+
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Error: Node.js is not installed. Please install Node.js from https://nodejs.org/
+    echo Error: Node.js is not installed. Please install it from https://nodejs.org/
     pause
     exit /b
 )
+
 echo Node.js is installed.
 
-echo [2/4] Installing Root Dependencies...
+echo.
+echo ===================================================
+echo [2/4] Installing Backend Dependencies...
+echo ===================================================
+cd backend
 call npm install
 
-echo [3/4] Installing Backend and Frontend Dependencies...
-cd backend && call npm install && cd ..
-cd frontend && call npm install && cd ..
+echo.
+echo ===================================================
+echo [3/4] Installing Frontend Dependencies...
+echo ===================================================
+cd ../frontend
+call npm install
 
-echo [4/4] Starting the Application...
-echo Backend will run on http://localhost:5000
-echo Frontend will run on http://localhost:5173
+echo.
+echo ===================================================
+echo [4/4] Starting System (Integrated Testing Mode)
+echo ===================================================
 
-:: Start the application in a new window
-start "Smart Todo Server" cmd /c "npm start"
+echo Launching Backend Server...
+cd ../backend
+start /b npm start
 
-:: Wait a few seconds for server to initialize
-timeout /t 5 /nobreak >nul
+echo Launching Frontend (Vite)...
+cd ../frontend
+start /b npm run dev -- --open
 
-:: Open browser
-start http://localhost:5173
+echo.
+echo ===================================================
+echo System is running!
+echo Backend: http://localhost:5000
+echo Frontend: http://localhost:5173
+echo ===================================================
+echo Press any key to stop all services...
+pause >nul
 
-echo Application is running. Close the other command window to stop the server.
-pause
+taskkill /F /IM node.exe /T
+echo Services stopped.
+exit

@@ -1,36 +1,52 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
+const sqlite3 = require('sqlite3').verbose();
+const morgan = require('morgan');
 
 const app = express();
 const PORT = 5000;
 
+// Middleware for QA & Monitoring (Phase 4)
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(morgan('dev')); // Logging for debugging
 
-// In-memory data for demo purposes (Phase 3 implementation)
-let todos = [
-  { id: 1, title: 'Project Kickoff', completed: true, priority: 'High' },
-  { id: 2, title: 'Develop Smart Todo UI', completed: false, priority: 'Medium' }
-];
+// Database Setup
+const db = new sqlite3.Database(':memory:');
+
+db.serialize(() => {
+    db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT, completed BOOLEAN, priority TEXT)");
+    db.run("INSERT INTO todos (task, completed, priority) VALUES ('System Integration Test', 0, 'High')");
+});
 
 // API Endpoints
 app.get('/api/todos', (req, res) => {
-  res.json(todos);
+    db.all("SELECT * FROM todos", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Database Error' });
+        res.json(rows);
+    });
 });
 
 app.post('/api/todos', (req, res) => {
-  const newTodo = { id: Date.now(), ...req.body, completed: false };
-  todos.push(newTodo);
-  res.status(201).json(newTodo);
+    const { task, priority } = req.body;
+    if (!task) return res.status(400).json({ error: 'Task is required' });
+    
+    db.run("INSERT INTO todos (task, completed, priority) VALUES (?, ?, ?)", [task, 0, priority || 'Medium'], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(201).json({ id: this.lastID, task, completed: 0, priority });
+    });
 });
 
-app.delete('/api/todos/:id', (req, res) => {
-  const { id } = req.params;
-  todos = todos.filter(t => t.id !== parseInt(id));
-  res.status(204).send();
+// Error Boundary Handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send({ status: 'error', message: 'Something broke!' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend Server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Backend running on http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
