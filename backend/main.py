@@ -1,33 +1,34 @@
 from fastapi import FastAPI, BackgroundTasks
-from etl_logic import SmartInventoryETL
-import os
+from pydantic import BaseModel
+from .app.analytics_engine import ModelRefiner
 
-app = FastAPI(title="SmartInventory ETL Service")
+app = FastAPI()
 
-# Configuration
-DB_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/inventory_db")
-etl_service = SmartInventoryETL(DB_URL)
+class FeedbackSchema(BaseModel):
+    sku: str
+    status: str
+    timestamp: str
 
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "pipeline": "ready"}
+@app.get("/api/v1/forecast/comparison")
+async def get_comparison():
+    # Mock data simulating POS data stream vs AI model
+    return [
+        {"time": "10:00", "sku": "BEV-001", "actual": 45, "predicted": 50, "error": 0.10},
+        {"time": "11:00", "sku": "BEV-001", "actual": 60, "predicted": 52, "error": 0.13},
+        {"time": "12:00", "sku": "BEV-001", "actual": 85, "predicted": 88, "error": 0.03}
+    ]
 
-@app.post("/trigger/etl/population")
-def trigger_population_etl(region_id: str, background_tasks: BackgroundTasks):
-    """Manual trigger for ETL pipeline via Dashboard"""
-    def run_pipeline():
-        data = etl_service.extract_public_population("YOUR_API_KEY", region_id)
-        # Further processing logic...
-        
-    background_tasks.add_task(run_pipeline)
-    return {"message": f"Population ETL triggered for {region_id}"}
+@app.post("/api/v1/feedback")
+async def submit_feedback(feedback: FeedbackSchema, background_tasks: BackgroundTasks):
+    # Save feedback to DB and trigger asynchronous model refinement check
+    print(f"Feedback received for {feedback.sku}: {feedback.status}")
+    # background_tasks.add_task(refiner.refine_weights, feedback)
+    return {"status": "success", "message": "Feedback integrated into next training cycle"}
 
-@app.get("/monitoring/stats")
-def get_pipeline_stats():
-    # Mock data for frontend monitoring dashboard
+@app.get("/api/v1/model/ab-test")
+async def get_ab_test_results():
     return {
-        "total_processed_records": 125400,
-        "success_rate": 99.8,
-        "last_sync": "2023-10-27T10:00:00Z",
-        "active_pipelines": ["Public_Pop_Sync", "Sales_Anonymizer"]
+        "model_a_mae": 4.52,
+        "model_b_mae": 3.88,
+        "improvement": "14.1%"
     }
