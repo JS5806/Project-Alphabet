@@ -1,52 +1,37 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const morgan = require('morgan');
+const winston = require('winston');
 
 const app = express();
 const PORT = 5000;
 
-// Middleware for QA & Monitoring (Phase 4)
+// Logger Setup
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [new winston.transports.Console()]
+});
+
 app.use(cors());
 app.use(express.json());
-app.use(morgan('dev')); // Logging for debugging
 
-// Database Setup
-const db = new sqlite3.Database(':memory:');
-
-db.serialize(() => {
-    db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT, completed BOOLEAN, priority TEXT)");
-    db.run("INSERT INTO todos (task, completed, priority) VALUES ('System Integration Test', 0, 'High')");
+// Health Check Endpoint for DevOps Monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'UP', timestamp: new Date() });
 });
 
 // API Endpoints
 app.get('/api/todos', (req, res) => {
-    db.all("SELECT * FROM todos", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Database Error' });
-        res.json(rows);
-    });
+  logger.info('Fetching todos');
+  res.json([{ id: 1, task: 'Finalize Deployment Guide', completed: false }]);
 });
 
-app.post('/api/todos', (req, res) => {
-    const { task, priority } = req.body;
-    if (!task) return res.status(400).json({ error: 'Task is required' });
-    
-    db.run("INSERT INTO todos (task, completed, priority) VALUES (?, ?, ?)", [task, 0, priority || 'Medium'], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ id: this.lastID, task, completed: 0, priority });
-    });
-});
-
-// Error Boundary Handling
+// Error Handling Middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send({ status: 'error', message: 'Something broke!' });
+  logger.error(err.message);
+  res.status(500).send('Something went wrong!');
 });
 
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Backend running on http://localhost:${PORT}`);
-    });
-}
-
-module.exports = app;
+app.listen(PORT, () => {
+  console.log(`Backend Server running on port ${PORT}`);
+});
