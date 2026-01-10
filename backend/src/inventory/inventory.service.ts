@@ -1,61 +1,49 @@
-import { Injectable, InternalServerErrorException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { Product } from './entities/product.entity';
-import { InventoryTransaction } from './entities/transaction.entity';
+import { Injectable, ConflictException } from '@nestjs/common';
+import { PrismaService } from '../prisma.service';
+import { TransactionType } from '@prisma/client';
 
-@Injectable()    
+@Injectable()
 export class InventoryService {
-  constructor(
-    private dataSource: DataSource,
-    @InjectRepository(Product) private productRepo: Repository<Product>,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   /**
-   * Critical Section: Stock Movement with Concurrency Control
-   * Ensures 0% error rate in stock tracking using Pessimistic Locking
+   * 재고 수량 변경 (입/출고 처리)
+   * Race Condition 방지를 위해 Prisma Transaction 및 인터랙티브 락 활용
    */
-  async processStockMovement(productId: string, amount: number, type: 'INBOUND' | 'OUTBOUND') {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // 1. Lock the product row for update to prevent concurrent race conditions
-      const product = await queryRunner.manager.findOne(Product, {
-        where: { id: productId },
-        lock: { mode: 'pessimistic_write' }
+  async processTransaction(barcode: String, quantity: number, type: TransactionType) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. 상품 확인
+      const product = await tx.product.findUnique({
+        where: { barcode: barcode.toString() },
+        include: { stock: true },
       });
 
-      if (!product) throw new Error('Product Not Found');
+      if (!product) throw new Error('상품을 찾을 수 없습니다.');
 
-      // 2. Calculate New Stock
-      const change = type === 'INBOUND' ? amount : -amount;
-      const newStock = Number(product.current_stock) + change;
+      // 2. 재고 수량 계산
+      const change = type === TransactionType.IN ? quantity : -quantity;
+      const newQuantity = (product.stock?.quantity || 0) + change;
 
-      if (newStock < 0) {
-        throw new ConflictException('Insufficient stock for this operation');
+      if (newQuantity < 0) {
+        throw new ConflictException('재고가 부족합니다.');
       }
 
-      // 3. Record Transaction (Atomicity)
-      const transaction = queryRunner.manager.create(InventoryTransaction, {
-        product_id: productId,
-        transaction_type: type,
-        quantity: amount,
+      // 3. 재고 업데이트 및 로그 생성 (원자적 작업)
+      const updatedStock = await tx.stock.upsert({
+        where: { productId: product.id },
+        update: { quantity: newQuantity },
+        create: { productId: product.id, quantity: newQuantity },
       });
-      await queryRunner.manager.save(transaction);
 
-      // 4. Update Product Stock
-      product.current_stock = newStock;
-      await queryRunner.manager.save(product);
+      await tx.inventoryLog.create({
+        data: {
+          productId: product.id,
+          type: type,
+          quantity: quantity,
+        },
+      });
 
-      await queryRunner.commitTransaction();
-      return { success: true, newStock };
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw new InternalServerErrorException(err.message);
-    } finally {
-      await queryRunner.release();
-    }
+      return { product, updatedStock };
+    });
   }
 }
