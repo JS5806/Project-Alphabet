@@ -1,32 +1,39 @@
 @echo off
-title Smart Todo Management System - One Click Starter
+SETLOCAL EnableDelayedExpansion
 
-echo [1/5] Checking Prerequisites...
+echo [System] Checking requirements...
+
+:: Check Node.js
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ERROR: Node.js is not installed. Please install Node.js from https://nodejs.org/
+    echo [Error] Node.js is not installed. Please install it from https://nodejs.org/
     pause
     exit /b
 )
 
-echo [2/5] Installing Backend Dependencies...
+echo [System] Installing Backend dependencies...
 cd backend
 call npm install
 
-echo [3/5] Installing Frontend Dependencies...
+echo [System] Installing Frontend dependencies...
 cd ../frontend
 call npm install
 
-echo [4/5] Starting Servers...
-cd ..
-start cmd /k "echo Backend Server Starting... && cd backend && npm start"
-start cmd /k "echo Frontend Application Starting... && cd frontend && npm start"
+echo [System] Starting Backend Server...
+cd ../backend
+start "Backend Server" cmd /c "node server.js"
 
-echo [5/5] Launching Application...
-timeout /t 10 /nobreak
-start http://localhost:3000
+echo [System] Starting Frontend Development Server...
+cd ../frontend
+start "Frontend Client" cmd /c "npm run dev"
 
-echo System is running!
-echo Backend API: http://localhost:5000
-echo Frontend: http://localhost:3000
+echo [System] Waiting for servers to initialize...
+timeout /t 5
+
+echo [System] Opening browser to application...
+start http://localhost:5173
+
+echo [Success] System is running.
+echo Backend: http://localhost:5000
+echo Frontend: http://localhost:5173
 pause
