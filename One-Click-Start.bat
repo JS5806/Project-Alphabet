@@ -1,56 +1,32 @@
 @echo off
-SETLOCAL EnableDelayedExpansion
-title Smart Todo Management System - One Click Startup
+title Smart Todo Management System - One Click Starter
 
-echo ===================================================
-echo [1/4] Checking Prerequisites...
-echo ===================================================
-
+echo [1/5] Checking Prerequisites...
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Error: Node.js is not installed. Please install it from https://nodejs.org/
+    echo ERROR: Node.js is not installed. Please install Node.js from https://nodejs.org/
     pause
     exit /b
 )
 
-echo Node.js is installed.
-
-echo.
-echo ===================================================
-echo [2/4] Installing Backend Dependencies...
-echo ===================================================
+echo [2/5] Installing Backend Dependencies...
 cd backend
 call npm install
 
-echo.
-echo ===================================================
-echo [3/4] Installing Frontend Dependencies...
-echo ===================================================
+echo [3/5] Installing Frontend Dependencies...
 cd ../frontend
 call npm install
 
-echo.
-echo ===================================================
-echo [4/4] Starting System (Integrated Testing Mode)
-echo ===================================================
+echo [4/5] Starting Servers...
+cd ..
+start cmd /k "echo Backend Server Starting... && cd backend && npm start"
+start cmd /k "echo Frontend Application Starting... && cd frontend && npm start"
 
-echo Launching Backend Server...
-cd ../backend
-start /b npm start
+echo [5/5] Launching Application...
+timeout /t 10 /nobreak
+start http://localhost:3000
 
-echo Launching Frontend (Vite)...
-cd ../frontend
-start /b npm run dev -- --open
-
-echo.
-echo ===================================================
 echo System is running!
-echo Backend: http://localhost:5000
-echo Frontend: http://localhost:5173
-echo ===================================================
-echo Press any key to stop all services...
-pause >nul
-
-taskkill /F /IM node.exe /T
-echo Services stopped.
-exit
+echo Backend API: http://localhost:5000
+echo Frontend: http://localhost:3000
+pause
