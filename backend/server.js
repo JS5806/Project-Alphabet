@@ -1,37 +1,36 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const bodyParser = require('body-parser');
+
 const app = express();
 const PORT = 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// SQLite Database setup (Local Demo Mode)
-const db = new sqlite3.Database(':memory:');
+// In-memory data for demo purposes (Phase 3 implementation)
+let todos = [
+  { id: 1, title: 'Project Kickoff', completed: true, priority: 'High' },
+  { id: 2, title: 'Develop Smart Todo UI', completed: false, priority: 'Medium' }
+];
 
-db.serialize(() => {
-    db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, is_completed BOOLEAN)");
-    db.run("INSERT INTO todos (title, content, is_completed) VALUES ('Build Architecture', 'Design DB and API', 1)");
-    db.run("INSERT INTO todos (title, content, is_completed) VALUES ('Implement UI/UX', 'Create Wireframes', 0)");
-});
-
-// REST API Endpoints
+// API Endpoints
 app.get('/api/todos', (req, res) => {
-    db.all("SELECT * FROM todos", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+  res.json(todos);
 });
 
 app.post('/api/todos', (req, res) => {
-    const { title, content } = req.body;
-    db.run("INSERT INTO todos (title, content, is_completed) VALUES (?, ?, ?)", [title, content, 0], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ id: this.lastID, title, content });
-    });
+  const newTodo = { id: Date.now(), ...req.body, completed: false };
+  todos.push(newTodo);
+  res.status(201).json(newTodo);
+});
+
+app.delete('/api/todos/:id', (req, res) => {
+  const { id } = req.params;
+  todos = todos.filter(t => t.id !== parseInt(id));
+  res.status(204).send();
 });
 
 app.listen(PORT, () => {
-    console.log(`Backend Server running on http://localhost:${PORT}`);
+  console.log(`Backend Server running on http://localhost:${PORT}`);
 });
