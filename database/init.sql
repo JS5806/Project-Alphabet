@@ -1,31 +1,25 @@
--- PostgreSQL Schema for Core Inventory
-CREATE TABLE stores (
-    store_id SERIAL PRIMARY KEY,
-    store_name VARCHAR(100) NOT NULL,
-    location_lat DECIMAL(10, 8),
-    location_lng DECIMAL(11, 8)
+-- Using TimeScaleDB for high-performance time-series AI data
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+CREATE TABLE inventory_history (
+    time TIMESTAMPTZ NOT NULL,
+    item_id VARCHAR(50) NOT NULL,
+    stock_level DOUBLE PRECISION,
+    unit_cost DOUBLE PRECISION
 );
 
-CREATE TABLE products (
-    product_id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    category VARCHAR(50),
-    unit_price DECIMAL(10, 2)
+-- Create hypertable for performance
+SELECT create_hypertable('inventory_history', 'time');
+
+CREATE TABLE demand_predictions (
+    prediction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_id VARCHAR(50) NOT NULL,
+    forecast_date DATE NOT NULL,
+    predicted_quantity DOUBLE PRECISION,
+    confidence_interval_high DOUBLE PRECISION,
+    confidence_interval_low DOUBLE PRECISION,
+    model_version VARCHAR(20),
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE inventory (
-    inventory_id SERIAL PRIMARY KEY,
-    store_id INTEGER REFERENCES stores(store_id),
-    product_id INTEGER REFERENCES products(product_id),
-    quantity INTEGER DEFAULT 0,
-    expiry_date DATE,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE sales_history (
-    sale_id SERIAL PRIMARY KEY,
-    store_id INTEGER REFERENCES stores(store_id),
-    product_id INTEGER REFERENCES products(product_id),
-    quantity_sold INTEGER,
-    sale_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+CREATE INDEX idx_item_time ON inventory_history (item_id, time DESC);
