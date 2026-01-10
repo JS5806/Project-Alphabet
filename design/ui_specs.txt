@@ -1,8 +1,0 @@
-Project: Simple_Tkinter_Digital_Clock
-Layout Specifications:
-1. Font: Monospaced (Consolas or Courier) to prevent text jitter during digit changes.
-2. Color Palette:
-   - Background: #000000 (Black)
-   - Foreground: #00FF00 (Neon Green) for high contrast and visibility.
-3. Alignment: Center-aligned both vertically and horizontally.
-4. Padding: 20px internal padding for visual breathing room.
