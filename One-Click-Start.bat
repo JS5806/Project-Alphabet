@@ -1,5 +1,6 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
+title Smart Todo Management System - Setup & Start
 
 echo [1/4] Checking Prerequisites...
 node -v >nul 2>&1
@@ -8,27 +9,27 @@ if %errorlevel% neq 0 (
     pause
     exit /b
 )
+echo Node.js is installed.
 
-echo [2/4] Installing Backend Dependencies...
-cd backend
+echo [2/4] Installing Root Dependencies...
 call npm install
 
-echo [3/4] Installing Frontend Dependencies...
-cd ../frontend
-call npm install
+echo [3/4] Installing Backend and Frontend Dependencies...
+cd backend && call npm install && cd ..
+cd frontend && call npm install && cd ..
 
-echo [4/4] Starting Services...
-start cmd /k "cd ../backend && title Backend_Server && npm start"
-echo Starting Backend on port 5000...
+echo [4/4] Starting the Application...
+echo Backend will run on http://localhost:5000
+echo Frontend will run on http://localhost:5173
 
+:: Start the application in a new window
+start "Smart Todo Server" cmd /c "npm start"
+
+:: Wait a few seconds for server to initialize
 timeout /t 5 /nobreak >nul
 
-echo Starting Frontend on port 3000...
-start cmd /k "cd ../frontend && title Frontend_App && npm run dev"
+:: Open browser
+start http://localhost:5173
 
-echo Waiting for services to initialize...
-timeout /t 10 /nobreak >nul
-
-start http://localhost:3000
-echo System is running!
+echo Application is running. Close the other command window to stop the server.
 pause
