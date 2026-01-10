@@ -1,41 +1,34 @@
 @echo off
-SETLOCAL
-echo ===================================================
-echo   Smart Todo Management System - One Click Start
-echo ===================================================
+SETLOCAL EnableDelayedExpansion
 
-:: 1. Check for Node.js
+echo [1/4] Checking Prerequisites...
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Node.js is not installed. Please install Node.js from https://nodejs.org/
+    echo Error: Node.js is not installed. Please install Node.js from https://nodejs.org/
     pause
     exit /b
 )
 
-:: 2. Install Backend Dependencies
-echo [Step 1/4] Installing Backend dependencies...
+echo [2/4] Installing Backend Dependencies...
 cd backend
 call npm install
-if %errorlevel% neq 0 ( echo [ERROR] Backend install failed. && pause && exit /b )
-cd ..
 
-:: 3. Install Frontend Dependencies
-echo [Step 2/4] Installing Frontend dependencies...
-cd frontend
+echo [3/4] Installing Frontend Dependencies...
+cd ../frontend
 call npm install
-if %errorlevel% neq 0 ( echo [ERROR] Frontend install failed. && pause && exit /b )
-cd ..
 
-:: 4. Start Backend Server (Background)
-echo [Step 3/4] Starting Backend Server (Port 5000)...
-start /B cmd /c "cd backend && node server.js"
+echo [4/4] Starting Services...
+start cmd /k "cd ../backend && title Backend_Server && npm start"
+echo Starting Backend on port 5000...
 
-:: 5. Start Frontend Server
-echo [Step 4/4] Starting Frontend Server (Vite)...
-echo The application will open in your browser automatically.
-timeout /t 5
-start http://localhost:5173
-cd frontend && npm run dev
+timeout /t 5 /nobreak >nul
 
+echo Starting Frontend on port 3000...
+start cmd /k "cd ../frontend && title Frontend_App && npm run dev"
+
+echo Waiting for services to initialize...
+timeout /t 10 /nobreak >nul
+
+start http://localhost:3000
+echo System is running!
 pause
-ENDLOCAL
