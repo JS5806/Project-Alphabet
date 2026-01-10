@@ -1,2 +1,0 @@
-# No external dependencies required for Tkinter (Standard Library)
-# Added for environment consistency
