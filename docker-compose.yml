@@ -1,31 +1,25 @@
 version: '3.8'
 services:
-  postgres:
-    image: postgres:15
+  db:
+    image: postgres:15-alpine
+    restart: always
     environment:
-      POSTGRES_DB: smartstore
-      POSTGRES_PASSWORD: admin_password
+      POSTGRES_USER: smart_admin
+      POSTGRES_PASSWORD: inventory_pwd123
+      POSTGRES_DB: smart_inventory
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  mongodb:
-    image: mongo:latest
+  backend:
+    build: ./backend
     ports:
-      - "27017:27017"
-
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-
-  kafka:
-    image: bitnami/kafka:latest
+      - "3000:3000"
     environment:
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-    ports:
-      - "9092:9092"
+      DATABASE_URL: "postgresql://smart_admin:inventory_pwd123@db:5432/smart_inventory"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
