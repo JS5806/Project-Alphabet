@@ -1,60 +1,49 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = 5000;
 
 app.use(cors());
 app.use(express.json());
 
-// Performance Cache (Step 1 requirement: < 10ms latency)
-const urlDatabase = new Map(); 
-const reverseDatabase = new Map();
+const SECRET_KEY = 'quicklink_secret';
 
-// Base62 Alphabet
-const charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// Mock Data for Analytics
+const analyticsData = {
+  timeSeries: [
+    { date: '2023-10-01', clicks: 400 },
+    { date: '2023-10-02', clicks: 600 },
+    { date: '2023-10-03', clicks: 800 },
+    { date: '2023-10-04', clicks: 500 },
+    { date: '2023-10-05', clicks: 1100 },
+  ],
+  devices: [
+    { name: 'Mobile', value: 65 },
+    { name: 'Desktop', value: 30 },
+    { name: 'Tablet', value: 5 }
+  ],
+  users: [
+    { id: 1, email: 'admin@quicklink.io', role: 'Admin', status: 'Active' },
+    { id: 2, email: 'dev@quicklink.io', role: 'User', status: 'Active' },
+    { id: 3, email: 'test@quicklink.io', role: 'User', status: 'Suspended' }
+  ]
+};
 
-function encodeBase62(num) {
-    let result = "";
-    while (num > 0) {
-        result = charset[num % 62] + result;
-        num = Math.floor(num / 62);
-    }
-    return result || "0";
-}
-
-let counter = 1000000; // Starting point for short IDs
-
-// API: Create Short URL
-app.post('/api/shorten', (req, res) => {
-    const { longUrl } = req.body;
-    if (!longUrl) return res.status(400).json({ error: 'URL is required' });
-
-    // Check if exists
-    if (reverseDatabase.has(longUrl)) {
-        return res.json({ shortCode: reverseDatabase.get(longUrl) });
-    }
-
-    const shortCode = encodeBase62(counter++);
-    urlDatabase.set(shortCode, longUrl);
-    reverseDatabase.set(longUrl, shortCode);
-
-    res.json({ shortCode });
+app.post('/api/login', (req, res) => {
+  const { email } = req.body;
+  const token = jwt.sign({ email, role: 'Admin' }, SECRET_KEY);
+  res.json({ token, role: 'Admin', email });
 });
 
-// REDIRECTION ENGINE (Optimized for Speed)
-app.get('/:shortCode', (req, res) => {
-    const start = Date.now();
-    const { shortCode } = req.params;
-    const longUrl = urlDatabase.get(shortCode);
-
-    if (longUrl) {
-        console.log(`[Redirect] Code: ${shortCode} -> ${Date.now() - start}ms`);
-        return res.redirect(301, longUrl);
-    }
-    
-    res.status(404).send('URL Not Found');
+app.get('/api/analytics', (req, res) => {
+  res.json(analyticsData);
 });
 
-app.listen(PORT, () => {
-    console.log(`Backend running on http://localhost:${PORT}`);
+app.get('/api/export', (req, res) => {
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=analytics.csv');
+  res.status(200).send("Date,Clicks\n2023-10-01,400\n2023-10-02,600");
 });
+
+app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
