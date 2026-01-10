@@ -1,0 +1,8 @@
+{
+  "bg_color": "#121212",
+  "fg_color": "#00FF41",
+  "font_family": "Courier New",
+  "font_size": 72,
+  "window_title": "Advanced Digital Clock",
+  "update_interval_ms": 1000
+}

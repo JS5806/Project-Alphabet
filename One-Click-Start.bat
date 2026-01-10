@@ -1,35 +1,37 @@
 @echo off
-SETLOCAL EnableDelayedExpansion
+TITLE Simple Tkinter Digital Clock - Deployer
 
 echo ===================================================
-echo   Simple Digital Clock - Lead Dev Automation
+echo  System Integrity Check and Application Launch
 echo ===================================================
 
-:: 1. Check for Python
+:: 1. Check if Python is installed
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Python is not installed or not in PATH.
-    echo Please install Python 3.x from https://www.python.org/
+    echo [ERROR] Python is not installed. Please install Python from https://www.python.org/
     pause
     exit /b
 )
 
-echo [1/3] Python detected.
+:: 2. Set up environment
+echo [1/3] Preparing resources...
+if not exist "logs" mkdir logs
 
-:: 2. Install dependencies (Tkinter is standard, but we ensure environment is ready)
-echo [2/3] Checking environment...
-:: No external pip requirements for this phase, but adding placeholder for future-proofing
-:: pip install -r requirements.txt
+:: 3. Install dependencies (if any listed in requirements.txt)
+echo [2/3] Checking dependencies...
+pip install -r requirements.txt
 
-:: 3. Run the application
+:: 4. Launch the application
 echo [3/3] Launching Digital Clock...
 echo ---------------------------------------------------
-python main.py
+echo Close the clock window to stop the application.
+echo ---------------------------------------------------
+
+python frontend/clock_app.py
 
 if %errorlevel% neq 0 (
-    echo [ERROR] Application exited with an error.
+    echo [ERROR] Application crashed. Please check logs/app_performance.log
     pause
 )
 
-echo Application closed.
-pause
+exit
