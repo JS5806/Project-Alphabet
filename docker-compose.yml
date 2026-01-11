@@ -1,27 +1,38 @@
 version: '3.8'
+
 services:
+  # 1. Database Service (PostgreSQL)
   db:
-    image: postgis/postgis:13-3.1
+    image: postgres:15-alpine
+    container_name: lunch_db
     environment:
-      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lunch_rec
     ports:
       - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  backend-java:
-    build: ./backend-java
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
-
-  ml-api-python:
-    build: ./ml-api
-    ports:
-      - "8000:8000"
-    environment:
-      - REDIS_URL=redis://cache:6379
-
+  # 2. Cache Service (Redis)
   cache:
-    image: redis:alpine
+    image: redis:7-alpine
+    container_name: lunch_cache
     ports:
       - "6379:6379"
+
+  # 3. Application Logic (Python Runner)
+  app:
+    build: 
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: lunch_app
+    environment:
+      DB_HOST: db
+      DB_NAME: lunch_rec
+      DB_USER: admin
+      DB_PASS: password
+      REDIS_HOST: cache
+    depends_on:
+      - db
+      - cache
