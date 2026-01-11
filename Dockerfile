@@ -1,23 +1,16 @@
-# Build Stage (예: Go Lang 기반 가정)
-FROM golang:1.21-alpine AS builder
+FROM python:3.9-slim
+
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN go build -o main .
 
-# Runtime Stage
-FROM alpine:3.18
-WORKDIR /app
-# 보안을 위해 Root가 아닌 사용자로 실행
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+# 캐싱 효율을 위해 requirements 먼저 복사
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --from=builder /app/main .
+# 소스코드 복사
+COPY app/ .
 
-# 환경변수는 런타임/배포 시 주입
-ENV DB_HOST=localhost
-ENV DB_PORT=5432
+# 포트 노출
+EXPOSE 8000
 
-EXPOSE 8080
-CMD ["./main"]
+# 서버 실행
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
