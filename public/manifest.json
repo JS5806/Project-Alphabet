@@ -1,0 +1,570 @@
+{
+  "name": "lunch-vote-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.0",
+    "firebase": "^10.0.0",
+    "zustand": "^4.3.8",
+    "react-kakao-maps-sdk": "^1.1.26",
+    "lucide-react": "^0.263.1",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^1.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5",
+    "tailwindcss": "^3.3.3",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27"
+  }
+}
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      height: {
+        'screen-dvh': '100dvh'
+      }
+    },
+  },
+  plugins: [],
+}
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+}
+
+export interface Restaurant {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  lat: number;
+  lng: number;
+  imageUrl?: string;
+  votes: number;
+}
+
+export interface VoteState {
+  [restaurantId: string]: number;
+}
+import { create } from 'zustand';
+import { User, Restaurant } from '../types';
+
+interface AppState {
+  user: User | null;
+  setUser: (user: User | null) => void;
+  restaurants: Restaurant[];
+  setRestaurants: (restaurants: Restaurant[]) => void;
+  selectedCategory: string;
+  setSelectedCategory: (category: string) => void;
+}
+
+export const useStore = create<AppState>((set) => ({
+  user: null,
+  setUser: (user) => set({ user }),
+  restaurants: [],
+  setRestaurants: (restaurants) => set({ restaurants }),
+  selectedCategory: '전체',
+  setSelectedCategory: (selectedCategory) => set({ selectedCategory }),
+}));
+import React from 'react';
+import { Outlet, NavLink } from 'react-router-dom';
+import { Map, Utensils, Home, UserCircle } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { auth } from '../firebase';
+
+const Layout = () => {
+  const { user } = useStore();
+
+  const handleLogout = () => auth.signOut();
+
+  return (
+    <div className="flex flex-col h-screen-dvh bg-gray-50 max-w-md mx-auto shadow-2xl overflow-hidden relative">
+      <header className="bg-white p-4 shadow-sm z-10 flex justify-between items-center">
+        <h1 className="text-xl font-bold text-orange-600">오늘뭐먹지</h1>
+        {user && (
+          <button onClick={handleLogout} className="text-xs text-gray-500 border px-2 py-1 rounded">
+            로그아웃
+          </button>
+        )}
+      </header>
+
+      <main className="flex-1 overflow-y-auto relative">
+        <Outlet />
+      </main>
+
+      <nav className="bg-white border-t flex justify-around p-3 pb-5 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        <NavLink to="/" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-orange-600' : 'text-gray-400'}`}>
+          <Home size={24} />
+          <span className="mt-1">홈</span>
+        </NavLink>
+        <NavLink to="/map" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-orange-600' : 'text-gray-400'}`}>
+          <Map size={24} />
+          <span className="mt-1">지도</span>
+        </NavLink>
+        <NavLink to="/roulette" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-orange-600' : 'text-gray-400'}`}>
+          <Utensils size={24} />
+          <span className="mt-1">추천</span>
+        </NavLink>
+        <NavLink to="/admin" className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-orange-600' : 'text-gray-400'}`}>
+          <UserCircle size={24} />
+          <span className="mt-1">관리</span>
+        </NavLink>
+      </nav>
+    </div>
+  );
+};
+
+export default Layout;
+import React, { useState } from 'react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase';
+import { useNavigate } from 'react-router-dom';
+
+const Login = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/');
+    } catch (error) {
+      alert('로그인 실패: 이메일과 비밀번호를 확인하세요.');
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full p-6 bg-white">
+      <h2 className="text-2xl font-bold mb-8">사내 점심 투표 로그인</h2>
+      <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
+        <input
+          type="email"
+          placeholder="사내 이메일 (@company.com)"
+          className="w-full p-3 border rounded-lg"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="비밀번호"
+          className="w-full p-3 border rounded-lg"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button type="submit" className="w-full bg-orange-500 text-white p-3 rounded-lg font-bold hover:bg-orange-600 transition">
+          로그인
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default Login;
+import React from 'react';
+import { Map, MapMarker } from 'react-kakao-maps-sdk';
+import { Restaurant } from '../types';
+
+interface Props {
+  restaurants: Restaurant[];
+  onSelect: (id: string) => void;
+}
+
+const KakaoMapWrapper: React.FC<Props> = ({ restaurants, onSelect }) => {
+  const COMPANY_LOC = { lat: 37.498095, lng: 127.027610 }; // 강남역 예시
+
+  return (
+    <Map
+      center={COMPANY_LOC}
+      style={{ width: "100%", height: "100%" }}
+      level={3}
+    >
+      <MapMarker position={COMPANY_LOC} image={{
+        src: "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
+        size: { width: 24, height: 35 }
+      }} title="회사" />
+
+      {restaurants.map((res) => (
+        <MapMarker
+          key={res.id}
+          position={{ lat: res.lat, lng: res.lng }}
+          onClick={() => onSelect(res.id)}
+          title={res.name}
+        />
+      ))}
+    </Map>
+  );
+};
+
+export default KakaoMapWrapper;
+import React, { useEffect, useState } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useStore } from '../store/useStore';
+import KakaoMapWrapper from '../components/KakaoMapWrapper';
+import { Restaurant } from '../types';
+
+const MapPage = () => {
+  const { restaurants, setRestaurants } = useStore();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "restaurants"), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Restaurant));
+      setRestaurants(data);
+    });
+    return () => unsubscribe();
+  }, [setRestaurants]);
+
+  const selectedRest = restaurants.find(r => r.id === selectedId);
+
+  return (
+    <div className="relative w-full h-full">
+      <KakaoMapWrapper restaurants={restaurants} onSelect={setSelectedId} />
+      
+      {selectedRest && (
+        <div className="absolute bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-lg z-20 animate-slide-up">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-bold">{selectedRest.name}</h3>
+              <p className="text-sm text-gray-500">{selectedRest.category}</p>
+            </div>
+            <button 
+              onClick={() => setSelectedId(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="mt-2 text-sm text-gray-700">{selectedRest.description}</p>
+          <div className="mt-3 flex justify-between items-center">
+            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+              현재 투표: {selectedRest.votes}표
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MapPage;
+import React, { useEffect } from 'react';
+import { collection, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useStore } from '../store/useStore';
+import { Restaurant } from '../types';
+
+const Home = () => {
+  const { restaurants, setRestaurants } = useStore();
+
+  useEffect(() => {
+    // 실시간 데이터 동기화
+    const unsubscribe = onSnapshot(collection(db, "restaurants"), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Restaurant));
+      // 투표순 정렬
+      data.sort((a, b) => b.votes - a.votes);
+      setRestaurants(data);
+    });
+    return () => unsubscribe();
+  }, [setRestaurants]);
+
+  const handleVote = async (id: string) => {
+    const ref = doc(db, "restaurants", id);
+    await updateDoc(ref, { votes: increment(1) });
+  };
+
+  return (
+    <div className="p-4 space-y-4 pb-20">
+      <div className="flex justify-between items-center mb-2">
+        <h2 className="text-lg font-bold">🔥 실시간 인기 순위</h2>
+      </div>
+
+      <div className="space-y-3">
+        {restaurants.map((res, idx) => (
+          <div key={res.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
+            <div className="font-bold text-xl w-6 text-center text-orange-500">{idx + 1}</div>
+            {res.imageUrl && (
+              <img src={res.imageUrl} alt={res.name} className="w-16 h-16 rounded-lg object-cover bg-gray-200" />
+            )}
+            <div className="flex-1">
+              <h3 className="font-bold">{res.name}</h3>
+              <p className="text-xs text-gray-500">{res.category}</p>
+              <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-orange-500 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${Math.min((res.votes / 20) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleVote(res.id)}
+              className="bg-orange-50 text-orange-600 p-2 rounded-full hover:bg-orange-100 active:scale-95 transition"
+            >
+              👍 {res.votes}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+import React, { useState } from 'react';
+import { addDoc, collection } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
+
+const Admin = () => {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('한식');
+  const [file, setFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      let imageUrl = '';
+      if (file) {
+        const storageRef = ref(storage, `restaurants/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        imageUrl = await getDownloadURL(storageRef);
+      }
+
+      await addDoc(collection(db, 'restaurants'), {
+        name,
+        category,
+        description: '관리자가 등록한 식당',
+        lat: 37.498095 + (Math.random() - 0.5) * 0.01, // 임의 위치
+        lng: 127.027610 + (Math.random() - 0.5) * 0.01,
+        imageUrl,
+        votes: 0,
+        createdAt: new Date()
+      });
+
+      alert('등록 완료!');
+      setName('');
+      setFile(null);
+    } catch (error) {
+      console.error(error);
+      alert('오류 발생');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <h2 className="text-xl font-bold mb-6">식당 등록 (관리자)</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">식당 이름</label>
+          <input 
+            value={name} onChange={e => setName(e.target.value)} 
+            className="w-full border p-2 rounded" required 
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">카테고리</label>
+          <select 
+            value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full border p-2 rounded"
+          >
+            <option>한식</option>
+            <option>중식</option>
+            <option>일식</option>
+            <option>양식</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">사진 업로드</label>
+          <input 
+            type="file" accept="image/*"
+            onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
+            className="w-full"
+          />
+        </div>
+        <button 
+          type="submit" disabled={isSubmitting}
+          className="w-full bg-blue-600 text-white p-3 rounded font-bold disabled:bg-gray-400"
+        >
+          {isSubmitting ? '등록 중...' : '등록하기'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default Admin;
+import React, { useState } from 'react';
+import { useStore } from '../store/useStore';
+
+const Roulette = () => {
+  const { restaurants } = useStore();
+  const [result, setResult] = useState<string | null>(null);
+  const [isSpinning, setIsSpinning] = useState(false);
+
+  const spin = () => {
+    if (restaurants.length === 0) return;
+    setIsSpinning(true);
+    setResult(null);
+    
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * restaurants.length);
+      setResult(restaurants[randomIndex].name);
+      setIsSpinning(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+      <h2 className="text-2xl font-bold mb-10">오늘의 점심 운세는?</h2>
+      
+      <div className={`w-48 h-48 rounded-full border-4 border-orange-400 flex items-center justify-center mb-8 shadow-xl ${isSpinning ? 'animate-spin' : ''}`}>
+        <span className="text-4xl">🥘</span>
+      </div>
+
+      {result && !isSpinning && (
+        <div className="animate-bounce mb-8">
+          <p className="text-gray-500 text-sm">추천 식당</p>
+          <h3 className="text-3xl font-extrabold text-orange-600">{result}</h3>
+        </div>
+      )}
+
+      <button 
+        onClick={spin}
+        disabled={isSpinning || restaurants.length === 0}
+        className="bg-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition disabled:opacity-50"
+      >
+        {isSpinning ? '두근두근...' : '메뉴 추천받기'}
+      </button>
+    </div>
+  );
+};
+
+export default Roulette;
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { useStore } from './store/useStore';
+
+import Layout from './components/Layout';
+import Login from './pages/Login';
+import Home from './pages/Home';
+import MapPage from './pages/MapPage';
+import Admin from './pages/Admin';
+import Roulette from './pages/Roulette';
+
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const { user } = useStore();
+  // 단순 예시: 실제 앱에서는 로딩 상태 처리 필요
+  return user ? children : <Navigate to="/login" />;
+};
+
+function App() {
+  const { setUser } = useStore();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName
+        });
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, [setUser]);
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<Home />} />
+          <Route path="/map" element={<MapPage />} />
+          <Route path="/roulette" element={<Roulette />} />
+          <Route path="/admin" element={<Admin />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>오늘뭐먹지</title>
+    <link rel="manifest" href="/manifest.json" />
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_JS_KEY&libraries=services,clusterer"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+{
+  "short_name": "오늘뭐먹지",
+  "name": "사내 점심 투표 앱",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#f97316",
+  "background_color": "#ffffff"
+}
