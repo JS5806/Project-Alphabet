@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: lunch-voting-system
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/lunch_db?serverTimezone=UTC&characterEncoding=UTF-8
+    username: root
+    password: password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # MVP 개발 편의를 위해 update 설정 (운영 시 validate 권장)
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        # [Technical Risk Solved] N+1 문제 완화를 위한 Batch Fetching 설정
+        default_batch_fetch_size: 100 
+    open-in-view: false
+
+  # Swagger UI Path: http://localhost:8080/swagger-ui/index.html
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
