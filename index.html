@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunch Vote MVP</title>
+    <!-- Tailwind CSS 로드: 디자인 토큰 1:1 매칭 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 게이지 바 애니메이션 부드럽게 처리 */
+        .gauge-bar { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased">
+
+    <!-- 모바일 환경을 고려한 메인 컨테이너 (max-w-md) -->
+    <main class="max-w-md mx-auto bg-white min-h-screen shadow-xl border-x border-slate-200 flex flex-col">
+        
+        <!-- 헤더 -->
+        <header class="p-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">🍱 오늘 뭐 먹지?</h1>
+            <span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">Live Voting</span>
+        </header>
+
+        <!-- 1. 간편 메뉴 등록 (Card UI) -->
+        <section class="p-5">
+            <h2 class="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wider">새 메뉴 등록</h2>
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-indigo-300 transition-colors">
+                <form id="addForm" class="flex gap-3">
+                    <div class="flex-1">
+                        <label for="menuName" class="sr-only">메뉴 이름</label>
+                        <input type="text" id="menuName" placeholder="예: 김치찌개, 버거킹" 
+                               class="w-full h-full text-base border-b border-slate-200 focus:outline-none focus:border-indigo-500 bg-transparent placeholder-slate-400 pb-1" required>
+                    </div>
+                    <button type="submit" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl flex items-center justify-center transition-transform active:scale-95 shadow-md shadow-indigo-200">
+                        <!-- Plus Icon -->
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 2. 실시간 투표 리스트 & 인터랙션 (Voting List) -->
+        <section class="flex-1 px-5 pb-5">
+            <h2 class="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wider">실시간 투표 현황</h2>
+            <ul id="voteList" class="space-y-4">
+                <!-- JS로 리스트 렌더링 -->
+            </ul>
+        </section>
+
+        <!-- 3. 결과 대시보드 (Winner Highlight) -->
+        <section class="bg-slate-50 border-t border-slate-200 p-6 rounded-t-3xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-bold text-lg text-slate-800">🏆 현재 1위</h2>
+                <button onclick="refreshDashboard()" class="text-xs text-slate-400 underline hover:text-slate-600">새로고침</button>
+            </div>
+            
+            <div id="winnerCard" class="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                <div class="relative z-10 flex justify-between items-end">
+                    <div>
+                        <span class="text-indigo-100 text-sm font-medium">Best Choice</span>
+                        <h3 id="winnnerName" class="text-2xl font-bold mt-1">집계 중...</h3>
+                    </div>
+                    <div class="text-right">
+                        <span id="winnerCount" class="text-3xl font-extrabold">0</span>
+                        <span class="text-sm text-indigo-100">표</span>
+                    </div>
+                </div>
+                <!-- 배경 장식 -->
+                <div class="absolute -right-6 -bottom-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
+            </div>
+        </section>
+
+        <!-- 4. 메신저 연동 프리뷰 (UI Guide for Devs) -->
+        <section class="bg-slate-800 p-5 mt-auto">
+            <h2 class="text-xs text-slate-400 mb-3 border-b border-slate-700 pb-2">Slack/Discord 미리보기 (Design Spec)</h2>
+            <!-- 메신저 카드 디자인 -->
+            <div class="flex border-l-4 border-indigo-500 bg-slate-700 rounded r-md p-3 max-w-sm">
+                <div class="flex-1">
+                    <p class="text-xs text-slate-400 font-bold mb-1">Lunch Vote Bot <span class="bg-slate-600 text-[10px] px-1 rounded ml-1">APP</span></p>
+                    <p class="text-sm text-slate-200 font-medium hover:underline cursor-pointer">🗳️ 오늘의 점심 메뉴 투표가 시작되었습니다.</p>
+                    <p class="text-xs text-slate-400 mt-1">가장 많은 표를 받은 메뉴가 선정됩니다.</p>
+                    <div class="mt-2 flex gap-2">
+                        <div class="h-8 w-24 bg-indigo-600 rounded flex items-center justify-center text-xs text-white font-bold cursor-pointer">투표하기</div>
+                    </div>
+                </div>
+                <div class="w-16 h-16 bg-slate-600 rounded ml-3 flex items-center justify-center text-2xl">🍱</div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // 초기 데이터 (Mock Data)
+        let menuItems = [
+            { id: 1, name: '마라탕', votes: 12 },
+            { id: 2, name: '돈까스', votes: 8 },
+            { id: 3, name: '샐러드', votes: 3 }
+        ];
+
+        const voteListEl = document.getElementById('voteList');
+        const winnerNameEl = document.getElementById('winnnerName');
+        const winnerCountEl = document.getElementById('winnerCount');
+
+        // 렌더링 함수: 리스트 및 게이지 바 업데이트
+        function render() {
+            // 총 투표수 계산 (게이지 비율용)
+            const totalVotes = menuItems.reduce((acc, cur) => acc + cur.votes, 0) || 1;
+            
+            // 리스트 정렬 (투표순)
+            const sortedItems = [...menuItems].sort((a, b) => b.votes - a.votes);
+
+            // 1. 투표 리스트 렌더링
+            voteListEl.innerHTML = menuItems.map(item => {
+                const percentage = ((item.votes / totalVotes) * 100).toFixed(1);
+                const isTop = item.votes === Math.max(...menuItems.map(i => i.votes));
+                
+                return `
+                <li class="relative">
+                    <!-- 카드 배경 -->
+                    <div class="flex items-center justify-between p-3 bg-white rounded-xl border ${isTop ? 'border-indigo-200 ring-1 ring-indigo-50' : 'border-slate-100'} shadow-sm relative overflow-hidden z-0">
+                        
+                        <!-- 게이지 바 (배경 애니메이션) -->
+                        <div class="absolute top-0 left-0 h-full bg-indigo-50 gauge-bar -z-10 opacity-60" style="width: ${percentage}%"></div>
+
+                        <!-- 텍스트 정보 -->
+                        <div class="flex items-center gap-3 z-10">
+                            <span class="font-medium text-slate-700">${item.name}</span>
+                        </div>
+
+                        <!-- 투표 버튼 및 카운트 -->
+                        <div class="flex items-center gap-3 z-10">
+                            <span class="text-xs font-bold text-slate-400">${percentage}%</span>
+                            <button onclick="vote(${item.id})" 
+                                    class="group flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-lg text-sm font-semibold transition-all ${isTop ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                                <span>${item.votes}</span>
+                                <svg class="w-4 h-4 ${isTop ? 'text-indigo-200' : 'text-slate-400 group-hover:text-slate-500'}" fill="currentColor" viewBox="0 0 20 20"><path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v7.333z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </li>
+                `;
+            }).join('');
+
+            // 2. 결과 대시보드 업데이트
+            const winner = sortedItems[0];
+            winnerNameEl.textContent = winner ? winner.name : '데이터 없음';
+            winnerCountEl.textContent = winner ? winner.votes : 0;
+        }
+
+        // 투표 로직
+        function vote(id) {
+            const item = menuItems.find(i => i.id === id);
+            if (item) {
+                item.votes++;
+                render();
+            }
+        }
+
+        // 메뉴 등록 로직
+        document.getElementById('addForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('menuName');
+            const name = input.value.trim();
+            
+            if (name) {
+                const newItem = {
+                    id: Date.now(),
+                    name: name,
+                    votes: 0
+                };
+                menuItems.push(newItem);
+                input.value = '';
+                render();
+            }
+        });
+
+        // 초기 실행
+        render();
+
+        // 새로고침 (가짜 기능)
+        function refreshDashboard() {
+            render();
+            alert("최신 집계 정보를 불러왔습니다.");
+        }
+    </script>
+</body>
+</html>
