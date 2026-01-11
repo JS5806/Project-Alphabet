@@ -1,0 +1,264 @@
+{
+  "name": "lunch-vote-backend",
+  "description": "Serverless backend for lunch voting system",
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.4.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "axios": "^1.4.0",
+    "moment": "^2.29.4"
+  },
+  "private": true
+}
+const axios = require('axios');
+const functions = require('firebase-functions');
+
+// Slack Webhook URL 환경변수 설정 필요 (firebase functions:config:set slack.webhook="URL")
+const SLACK_WEBHOOK_URL = functions.config().slack?.webhook;
+
+/**
+ * 슬랙 알림 발송 (Rate Limit 처리를 위한 재시도 로직 포함)
+ * @param {string} text - 발송할 메시지
+ * @param {number} retryCount - 재시도 횟수
+ */
+exports.sendSlackNotification = async (text, retryCount = 0) => {
+  if (!SLACK_WEBHOOK_URL) {
+    console.error("Slack Webhook URL is missing.");
+    return;
+  }
+
+  try {
+    await axios.post(SLACK_WEBHOOK_URL, { text });
+    console.log("Slack notification sent successfully.");
+  } catch (error) {
+    if (error.response && error.response.status === 429 && retryCount < 3) {
+      // API Rate Limit (429) 발생 시 지수 백오프 적용 후 재시도
+      const delay = Math.pow(2, retryCount) * 1000;
+      console.warn(`Rate limit hit. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return exports.sendSlackNotification(text, retryCount + 1);
+    }
+    console.error("Failed to send Slack notification:", error.message);
+  }
+};
+const admin = require('firebase-admin');
+const db = admin.firestore();
+
+// 식당 등록
+exports.createRestaurant = async (req, res) => {
+  try {
+    const { name, location, menu } = req.body;
+    const docRef = await db.collection('restaurants').add({
+      name,
+      location,
+      menu,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.status(201).json({ id: docRef.id, message: 'Restaurant added' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 식당 조회 (전체)
+exports.getRestaurants = async (req, res) => {
+  try {
+    const snapshot = await db.collection('restaurants').get();
+    const restaurants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.status(200).json(restaurants);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 식당 수정
+exports.updateRestaurant = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection('restaurants').doc(id).update(req.body);
+    res.status(200).json({ message: 'Restaurant updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 식당 삭제
+exports.deleteRestaurant = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection('restaurants').doc(id).delete();
+    res.status(200).json({ message: 'Restaurant deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+const admin = require('firebase-admin');
+const db = admin.firestore();
+const { sendSlackNotification } = require('../utils/slackClient');
+
+// 투표 행사 (트랜잭션을 이용한 중복 방지)
+exports.castVote = async (req, res) => {
+  const { sessionId, restaurantId, userId } = req.body;
+  const sessionRef = db.collection('voteSessions').doc(sessionId);
+
+  try {
+    await db.runTransaction(async (t) => {
+      const sessionDoc = await t.get(sessionRef);
+      if (!sessionDoc.exists) throw new Error("Session does not exist");
+      
+      const data = sessionDoc.data();
+      if (data.status !== 'open') throw new Error("Voting session is closed");
+      
+      const votedUsers = data.votedUsers || [];
+      if (votedUsers.includes(userId)) throw new Error("User already voted");
+
+      // 득표수 업데이트 및 사용자 기록
+      const currentVotes = data.votes || {};
+      const newCount = (currentVotes[restaurantId] || 0) + 1;
+      
+      t.update(sessionRef, {
+        [`votes.${restaurantId}`]: newCount,
+        votedUsers: admin.firestore.FieldValue.arrayUnion(userId)
+      });
+    });
+
+    res.status(200).json({ message: 'Vote cast successfully' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// 투표 종료 및 결과 선정 (랜덤 알고리즘 포함)
+exports.closeSession = async (req, res) => {
+  const { sessionId } = req.body;
+  const sessionRef = db.collection('voteSessions').doc(sessionId);
+
+  try {
+    const result = await db.runTransaction(async (t) => {
+      const doc = await t.get(sessionRef);
+      if (!doc.exists) throw new Error("Session not found");
+      
+      const data = doc.data();
+      const votes = data.votes || {};
+      
+      // 최다 득표 찾기
+      let maxVote = -1;
+      let candidates = [];
+      
+      for (const [restId, count] of Object.entries(votes)) {
+        if (count > maxVote) {
+          maxVote = count;
+          candidates = [restId];
+        } else if (count === maxVote) {
+          candidates.push(restId);
+        }
+      }
+
+      // 득표가 없거나 동률일 경우 전체/후보군 내 랜덤 선정
+      let selectedId;
+      if (candidates.length === 0) {
+         // 투표가 없으면 등록된 식당 중 랜덤 추천
+         const allRestSnapshot = await db.collection('restaurants').get();
+         if (allRestSnapshot.empty) throw new Error("No restaurants available");
+         const randomIdx = Math.floor(Math.random() * allRestSnapshot.size);
+         selectedId = allRestSnapshot.docs[randomIdx].id;
+      } else {
+         // 후보군(동률 포함) 중 랜덤 선정
+         const randomIdx = Math.floor(Math.random() * candidates.length);
+         selectedId = candidates[randomIdx];
+      }
+
+      // 식당 상세 정보 가져오기
+      const restDoc = await t.get(db.collection('restaurants').doc(selectedId));
+      const restData = restDoc.data();
+
+      t.update(sessionRef, {
+        status: 'closed',
+        result: { id: selectedId, name: restData.name }
+      });
+
+      return { id: selectedId, name: restData.name, voteCount: maxVote };
+    });
+
+    // 슬랙 알림 비동기 트리거
+    await sendSlackNotification(`📢 투표 종료! 오늘의 점심 장소는 *${result.name}* 입니다.`);
+
+    res.status(200).json({ message: 'Session closed', result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const express = require('express');
+const cors = require('cors');
+
+admin.initializeApp();
+
+const restaurantController = require('./controllers/restaurantController');
+const voteController = require('./controllers/voteController');
+const { sendSlackNotification } = require('./utils/slackClient');
+
+const app = express();
+app.use(cors({ origin: true }));
+app.use(express.json());
+
+// --- Routes: Restaurants (CRUD) ---
+app.post('/restaurants', restaurantController.createRestaurant);
+app.get('/restaurants', restaurantController.getRestaurants);
+app.put('/restaurants/:id', restaurantController.updateRestaurant);
+app.delete('/restaurants/:id', restaurantController.deleteRestaurant);
+
+// --- Routes: Voting ---
+app.post('/vote', voteController.castVote);
+app.post('/vote/close', voteController.closeSession);
+
+// Expose Express API as a single Cloud Function
+exports.api = functions.https.onRequest(app);
+
+// --- Firestore Triggers ---
+
+// 투표 세션 생성 시 슬랙 알림 (투표 시작)
+exports.onVoteSessionCreated = functions.firestore
+  .document('voteSessions/{sessionId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    await sendSlackNotification(`🔔 새로운 점심 투표가 시작되었습니다! (${data.title || '오늘의 점심'})`);
+  });
+
+// 투표 결과 확정 시 추가 로직 (필요 시 확장 가능)
+exports.onVoteSessionUpdated = functions.firestore
+  .document('voteSessions/{sessionId}')
+  .onUpdate(async (change, context) => {
+    const newData = change.after.data();
+    const previousData = change.before.data();
+
+    // 상태가 open -> closed로 변경되었을 때만 트리거
+    if (previousData.status === 'open' && newData.status === 'closed') {
+        console.log(`Vote Closed. Result: ${newData.result?.name}`);
+        // Note: Controller에서 알림을 보내지만, 이곳에서 보장성 알림을 보낼 수도 있음.
+    }
+  });
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 식당 정보: 누구나 읽기 가능, 쓰기는 인증된 관리자(예시)만 가능
+    match /restaurants/{restaurant} {
+      allow read: if true;
+      allow write: if request.auth != null; 
+    }
+    
+    // 투표 세션: 누구나 읽기 가능
+    match /voteSessions/{session} {
+      allow read: if true;
+      // 쓰기(투표, 종료 등)는 Cloud Functions(Backend Admin SDK)를 통해서만 처리하도록 제한하여 정합성 유지
+      allow write: if false; 
+    }
+  }
+}
