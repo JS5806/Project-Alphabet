@@ -1,27 +1,49 @@
 version: '3.8'
+
 services:
+  # [Infrastructure] PostgreSQL Database
   db:
-    image: postgis/postgis:13-3.1
+    image: postgres:15-alpine
+    restart: always
     environment:
-      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lunch_voting
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  backend-java:
-    build: ./backend-java
+  # [Infrastructure] Redis Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    restart: always
     ports:
-      - "8080:8080"
-    depends_on:
-      - db
+      - "6379:6379"
 
-  ml-api-python:
-    build: ./ml-api
+  # [Application] FastAPI Backend
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     environment:
-      - REDIS_URL=redis://cache:6379
+      POSTGRES_HOST: db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lunch_voting
+      REDIS_HOST: redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
-  cache:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
+volumes:
+  postgres_data:
