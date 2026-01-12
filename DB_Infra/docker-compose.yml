@@ -1,54 +1,56 @@
 version: '3.8'
 
 services:
-  # 1. PostgreSQL Database
+  # [DB] MySQL: 영속적 데이터 저장
   db:
-    image: postgres:15-alpine
-    container_name: mvp_postgres
+    image: mysql:8.0
+    container_name: menu_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mvp_db
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: menudb
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpassword
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    restart: always
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/mysql
+    networks:
+      - menu_net
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
-  # 2. Redis (Cache & Queue)
+  # [Cache] Redis: 세션 관리 및 스케줄러 Lock
   redis:
-    image: redis:7-alpine
-    container_name: mvp_redis
+    image: redis:alpine
+    container_name: menu_redis
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes  # 데이터 지속성 보장
-    restart: always
+    networks:
+      - menu_net
 
-  # 3. Vote Worker (Write-Back Processor)
-  vote-worker:
+  # [App] Backend API & Scheduler
+  backend:
     build: ./backend
-    container_name: mvp_vote_worker
+    container_name: menu_api
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "5000:5000"
     environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      DB_HOST: db
-      DB_NAME: mvp_db
-      DB_USER: postgres
-      DB_PASS: password
-    restart: always
+      DATABASE_URL: mysql+pymysql://devuser:devpassword@db:3306/menudb
+      REDIS_URL: redis://redis:6379/0
+    networks:
+      - menu_net
 
-  # 4. App Server (Placeholder for API Server)
-  # 실제로는 Node.js, Spring, FastAPI 등이 들어갈 자리
-  # app:
-  #   build: ./api
-  #   depends_on: [db, redis]
+networks:
+  menu_net:
+    driver: bridge
 
 volumes:
-  postgres_data:
-  redis_data:
+  db_data:
