@@ -2,9 +2,15 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
+# 필요한 시스템 패키지 설치
+RUN apt-get update && apt-get install -y default-libmysqlclient-dev gcc && rm -rf /var/lib/apt/lists/*
+
+# 의존성 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY vote_worker.py .
+# 소스 코드 복사
+COPY . .
 
-CMD ["python", "vote_worker.py"]
+# 실행
+CMD ["python", "app.py"]
