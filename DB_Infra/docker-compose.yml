@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: mvp_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mvp_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  # 2. Redis (Cache & Queue)
+  redis:
+    image: redis:7-alpine
+    container_name: mvp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes  # 데이터 지속성 보장
+    restart: always
+
+  # 3. Vote Worker (Write-Back Processor)
+  vote-worker:
+    build: ./backend
+    container_name: mvp_vote_worker
+    depends_on:
+      - db
+      - redis
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DB_HOST: db
+      DB_NAME: mvp_db
+      DB_USER: postgres
+      DB_PASS: password
+    restart: always
+
+  # 4. App Server (Placeholder for API Server)
+  # 실제로는 Node.js, Spring, FastAPI 등이 들어갈 자리
+  # app:
+  #   build: ./api
+  #   depends_on: [db, redis]
+
+volumes:
+  postgres_data:
+  redis_data:
